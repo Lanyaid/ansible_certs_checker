@@ -1,19 +1,10 @@
 ---
-- name: "Variables AM"
-  hosts: am
-  become: true
-  become_user: root
+- name: "Display host variables"
+  hosts: all
+  become: false
   any_errors_fatal: false
   gather_facts: false
   tasks:
-    - debug:
-        var: hostvars[inventory_hostname]
-- name: "Variables DS"
-  hosts: ds
-  become: true
-  become_user: root
-  any_errors_fatal: false
-  gather_facts: false
-  tasks:
-    - debug:
+    - name: "Show variables for the current host"
+      ansible.builtin.debug:
         var: hostvars[inventory_hostname]

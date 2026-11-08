@@ -3,9 +3,23 @@
 
 ############## Retrieve the certificate ##############
 - name: "Retrieve the certificate from port {{ check_port }}"
-  shell: >-
-    timeout 5s openssl s_client -connect $(hostname):{{ check_port }} </dev/null 2>/dev/null | openssl x509 -noout -text 2>&1
+  ansible.builtin.raw: >-
+    timeout 5s openssl s_client
+    -connect {{ (cert_check_target_host ~ ':' ~ (check_port | string)) | quote }}
+    -servername {{ (cert_check_server_name | default(inventory_hostname)) | quote }}
+    </dev/null 2>/dev/null | openssl x509 -noout -text
+  vars:
+    cert_check_target_host: >-
+      {{ 'localhost'
+      if cert_check_method == 'ssh' and cert_check_server_localhost | default(true)
+      else (
+        cert_check_server_name
+        if cert_check_method == 'ssh'
+        else cert_check_host | default(inventory_hostname)
+      ) }}
+  delegate_to: "{{ inventory_hostname if cert_check_method == 'ssh' else 'localhost' }}"
   register: cert
+  changed_when: false
 ############## End of certificate retrieval ##############
 
 ############## Save the certificate content ##############
@@ -28,6 +42,7 @@
     fi
   register: notbefore
   failed_when: notbefore.rc != 0
+  changed_when: false
 
 - name: "Set a default value if 'Not Before' is empty"
   set_fact:
@@ -53,6 +68,7 @@
     fi
   register: notafter
   failed_when: notafter.rc != 0
+  changed_when: false
 
 - name: "Set a default value if 'Not After' is empty"
   set_fact:
@@ -67,7 +83,7 @@
 ############## Processing the 'Subject CN' ##############
 - name: "Extract the 'Subject CN' value"
   set_fact:
-    subject_CN_raw: "{{ (cert_content | regex_search('Subject: .*, CN=([^\\n]+)', '\\1'))[0] | default('') | string | trim }}"
+    subject_CN_raw: "{{ (cert_content | regex_findall('(?m)^\\s*Subject:.*?CN\\s*=\\s*([^,\\n]+)') | first | default('Not defined')) | trim }}"
 
 - name: "Set a default value if 'Subject CN' is empty"
   set_fact:

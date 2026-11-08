@@ -1,9 +1,0 @@
-Ansible to check 
-* openam
-  - http ssl cert
-  - sign cert
-* opends
-  - ssl cert admin interface
-  - ssl cert synchronization
-
-

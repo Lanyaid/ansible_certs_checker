@@ -1,112 +1,67 @@
 ---
-# Manage and process certificate results
-
-############## Setup on localhost: Prepare result file ##############
-- name: "Administer local result file"
+- name: Initialize the local certificate report
   hosts: localhost
-  gather_facts: true  # Only gather facts on localhost
+  gather_facts: true
   tasks:
-    - name: "Set today's date on localhost"
-      set_fact:
-        local_today_date: "{{ ansible_date_time.iso8601 }}"
+    - name: Save the current date
+      ansible.builtin.set_fact:
+        local_today_date: "{{ ansible_facts.date_time.iso8601 }}"
 
-    - name: "Remove old result file"
-      file:
-        path: "/tmp/result_cert.csv"
+    - name: Remove any previous report
+      ansible.builtin.file:
+        path: /tmp/result_cert.csv
         state: absent
 
-    - name: "Create new result file"
-      file:
-        path: "/tmp/result_cert.csv"
-        state: touch
+    - name: Create the report with its header
+      ansible.builtin.copy:
+        dest: /tmp/result_cert.csv
+        content: "Hostname;Port;Not Before;Not After;Expire Days;Subject;Serial Number\n"
+        mode: "0644"
 
-    - name: "Add headers to the result file"
+- name: Check certificates for all configured hosts
+  hosts: "all:!localhost"
+  become: false
+  gather_facts: false
+  serial: 1
+  ignore_unreachable: true
+  tasks:
+    - name: Validate the group's port list
+      ansible.builtin.assert:
+        that:
+          - cert_check_ports is defined
+          - cert_check_ports is sequence
+          - cert_check_ports is not string
+          - cert_check_ports | length > 0
+          - cert_check_method is defined
+          - cert_check_method in ['ssh', 'openssl']
+          - >-
+            cert_check_method != 'ssh'
+            or cert_check_server_localhost is not defined
+            or cert_check_server_localhost is boolean
+          - >-
+            cert_check_method != 'ssh'
+            or cert_check_server_localhost | default(true)
+            or (
+              cert_check_server_name is defined
+              and cert_check_server_name | string | length > 0
+            )
+        fail_msg: >-
+          Define cert_check_method as 'ssh' or 'openssl', provide a non-empty
+          cert_check_ports list, and when SSH mode does not target localhost,
+          define cert_check_server_name. cert_check_server_localhost must be a
+          YAML boolean.
       delegate_to: localhost
-      lineinfile:
-        line: "Hostname;Port;Not Before;Not After;Expire Days;Subject;Serial Number" 
-        path: "/tmp/result_cert.csv"
-############## End of localhost setup ##############
 
-############## Check certificates on Forgerock OpenAM hosts ##############
-- name: "Forgerock OpenAM - Check installed certificates"
-  hosts: "am"
-  become: no
-  gather_facts: false
-  any_errors_fatal: false
-  ignore_errors: true
-  ignore_unreachable: true
-  max_fail_percentage: 50
-  serial: 1
-  vars:
-    check_port: "{{ check_port1 }}"
-  tasks:
-    - name: "Import check_cert role for OpenAM hosts"
-      import_role:
+    - name: Check each configured port
+      ansible.builtin.include_role:
         name: check_cert
         tasks_from: main
+        apply:
+          delegate_to: localhost
       vars:
         today_date: "{{ hostvars['localhost'].local_today_date }}"
-############## End of OpenAM certificate check ##############
-
-############## Check certificates on Forgerock OpenDS (replication) ##############
-- name: "Forgerock OpenDS - Check installed certificates (replication)"
-  hosts: ds,!exclude_rep
-  become: no
-  gather_facts: false
-  any_errors_fatal: false
-  ignore_errors: true
-  ignore_unreachable: true
-  max_fail_percentage: 50
-  throttle: 1
-  serial: 1
-  vars:
-    check_port: "{{ check_port1 }}"
-  tasks:
-    - name: "Import check_cert role for OpenDS replication"
-      import_role:
-        name: check_cert
-        tasks_from: main
-      vars:
-        today_date: "{{ hostvars['localhost'].local_today_date }}"
-############## End of OpenDS (replication) certificate check ##############
-
-############## Check certificates on Forgerock OpenDS (LDAPS) ##############
-- name: "Forgerock OpenDS - Check installed certificates (LDAPS)"
-  hosts: ds,!exclude_ldaps
-  become: no
-  gather_facts: false
-  any_errors_fatal: false
-  ignore_errors: true
-  ignore_unreachable: true
-  max_fail_percentage: 50
-  throttle: 1
-  serial: 1
-  vars:
-    check_port: "{{ check_port2 }}"
-  tasks:
-    - name: "Import check_cert role for OpenDS LDAPS"
-      import_role:
-        name: check_cert
-        tasks_from: main
-      vars:
-        today_date: "{{ hostvars['localhost'].local_today_date }}"
-############## End of OpenDS (LDAPS) certificate check ##############
-
-############## Check certificates on Forgerock OpenDS (admin interface) ##############
-- name: "Forgerock OpenDS - Check installed certificates (admin interface)"
-  hosts: ds
-  become: no
-  gather_facts: no
-  any_errors_fatal: false
-  throttle: 1
-  serial: 1
-  vars:
-    check_port: "{{ check_port3 }}"
-  tasks:
-    - name: "Import check_cert role for OpenDS admin interface"
-      import_role:
-        name: check_cert
-        tasks_from: main
-      vars:
-        today_date: "{{ hostvars['localhost'].local_today_date }}"
-############## End of OpenDS (admin interface) certificate check ##############
+      loop: "{{ cert_check_ports }}"
+      loop_control:
+        loop_var: check_port
+        label: "{{ check_port }}"
+      ignore_errors: true

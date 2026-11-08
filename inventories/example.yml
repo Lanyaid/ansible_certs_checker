@@ -1,0 +1,32 @@
+all:
+  children:
+    direct_tls:
+      vars:
+        cert_check_method: openssl
+        cert_check_ports:
+          - 443
+      hosts:
+        public-service.example.test:
+
+    ssh_local_tls:
+      vars:
+        cert_check_method: ssh
+        ansible_user: "{{ ansible_users[inventory_hostname] }}"
+        ansible_password: "{{ ansible_passwords[inventory_hostname] }}"
+        cert_check_server_localhost: true
+        cert_check_ports:
+          - 8443
+      hosts:
+        app-server.example.test:
+
+    ssh_named_tls:
+      vars:
+        cert_check_method: ssh
+        ansible_user: "{{ ansible_users[inventory_hostname] }}"
+        ansible_password: "{{ ansible_passwords[inventory_hostname] }}"
+        cert_check_server_localhost: false
+        cert_check_server_name: service.internal.example.test
+        cert_check_ports:
+          - 9443
+      hosts:
+        proxy-server.example.test:

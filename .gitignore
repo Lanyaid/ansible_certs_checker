@@ -2,4 +2,9 @@
 *.key*
 *.cert*
 *.srl*
-
+inventories/home-lab.yml
+inventories/host_vars/
+/inventories/group_vars/all/vault.yml
+roles/check_cert/tasks/main_old.yml
+roles/check_cert_ds_deprecated
+show_variables.yml
