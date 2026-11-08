@@ -1,7 +1,3 @@
-*.crt*
-*.key*
-*.cert*
-*.srl*
 inventories/home-lab.yml
 inventories/host_vars/
 /inventories/group_vars/all/vault.yml
